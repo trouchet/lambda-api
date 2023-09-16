@@ -1,15 +1,16 @@
-FROM public.ecr.aws/lambda/python:3.9.2023.03.15.15-x86_64 
+FROM public.ecr.aws/lambda/python:3.9.2023.03.15.15-x86_64
 
-# Install the requirements.txt
-COPY requirements.txt  .
-RUN  pip3 install -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
+# Set the working directory to the parent directory of Python scripts and pyproject.toml
+WORKDIR ${LAMBDA_TASK_ROOT}
 
-# Copy all .py files in the current directory to the Lambda task root
-COPY *.py ${LAMBDA_TASK_ROOT}/
+# Install system dependencies (if needed)
+RUN pip install poetry
 
-# Copy model pickle (alternatively, upload it to S3)
-# TAKE NOTE: UNCOMMENT LINE BELOW IN CASE THERE IS A MODEL TO PICKLE
-# COPY model.pickle ${LAMBDA_TASK_ROOT}
+# Install system dependencies (if needed)
+RUN pip install poetry
+
+# Copy your application code
+COPY . .
 
 # Set the CMD to your handler
-CMD [ "predict_resolver.predict" ]
+CMD ["lambda_api.predict_service.predict"]
