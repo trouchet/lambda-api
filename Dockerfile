@@ -6,8 +6,9 @@ WORKDIR ${LAMBDA_TASK_ROOT}
 # Install system dependencies (if needed)
 RUN pip install poetry
 
-# Install system dependencies (if needed)
-RUN pip install poetry
+# Copy model pickle (alternatively, upload it to S3)
+# TAKE NOTE: UNCOMMENT LINE BELOW IN CASE THERE IS A MODEL TO PICKLE
+# COPY model.pickle ${LAMBDA_TASK_ROOT}
 
 # Copy your application code
 COPY . .
