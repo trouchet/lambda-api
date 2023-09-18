@@ -11,13 +11,24 @@ def build_api_url(rest_api_id, region_, endpoint_, stage_):
     route=f"{stage_}/{endpoint_}/"
     return f"{host}/{route}"
 
+def delete_apis_by_name(api_gateway_client, rest_api_name):
+    # Get all APIs
+    response = api_gateway_client.get_rest_apis()
+
+    for item in response['items']:
+        if item['name'] == rest_api_name:
+            # Delete the API by its ID
+            api_id = item['id']
+            api_gateway_client.delete_rest_api(restApiId=api_id)
+            print(f"Deleted API with name '{rest_api_name}' and ID '{api_id}'")
+
 def has_api(g_client, rest_api_name_):
     response = g_client.get_rest_apis()
-    create_api_on_gateway = True
+    create_api_on_gateway = False
     
     for item in response['items']:
         if item['name'] == rest_api_name_:
-            create_api_on_gateway = False
+            create_api_on_gateway = True
             
     return create_api_on_gateway
 
