@@ -1,0 +1,10 @@
+{
+    "rate_limits": {
+        "burstLimit": 10,
+        "rateLimit": 10.0
+    },
+    "quota": {
+        "limit": 100,
+        "period": "DAY"
+    }
+}

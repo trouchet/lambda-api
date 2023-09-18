@@ -2,7 +2,8 @@ from os import system
 import subprocess
 from subprocess import DEVNULL
 
-DEFAULT_TAG='latest'
+from .misc import print_start_message, print_success_message
+from .default_values import DEFAULT_TAG
 
 def build_tagged_image(image_name, tag):
     return f"{image_name}:{tag}"
@@ -16,12 +17,11 @@ def build_ecr_url(account_id_, region_, image_name, tag_=DEFAULT_TAG):
     
     return f"{password_stdin}/{tagged_image_name}"
 
-
 def run(command):
     subprocess.run(command, stdout=DEVNULL, stderr=DEVNULL, shell=True)
 
 def login_ecr_docker(account_id, region):
-    print('Logining on ECR account...')
+    print('Logging in on ECR account...')
 
     password_stdin=build_ecr_password_stdin(account_id, region)
     
@@ -81,6 +81,10 @@ def push_docker_image(tagged_image_uri):
     run(push_command)
 
 def pipe_push_image(account_id_, region_, ecr_image_name_, tag_=DEFAULT_TAG):
+    task_name=f"Docker image upload on AWS ECR"
+
+    print_start_message(task_name)
+
     # 1. Log in to AWS ECR
     login_ecr_docker(account_id_, region_)
     
@@ -101,4 +105,4 @@ def pipe_push_image(account_id_, region_, ecr_image_name_, tag_=DEFAULT_TAG):
     # 6. Push your image to ECR
     push_docker_image(routed_url)
 
-    print('Docker image upload finished successfully!')
+    print_success_message(task_name)

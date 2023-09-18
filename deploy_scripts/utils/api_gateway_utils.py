@@ -1,3 +1,7 @@
+from .misc import print_start_message, print_success_message
+from .default_values import GATEWAY_DEPLOYMENT_SLEEP_SECONDS, \
+    GATEWAY_DEPLOYMENT_UPDATE_DELAY_SECONDS
+
 def build_source_arn(region_, account_id_, rest_api_id_):
     return f'arn:aws:execute-api:{region_}:{account_id_}:{rest_api_id_}/*'
 
@@ -68,6 +72,35 @@ def get_lambda_arn(g_client, function_name_):
     return response['Configuration']['FunctionArn']
 
 def setup_integration(g_client, lambda_uri_, rest_api_id_, resource_id_, method_verb_):
+    """
+    Set up integration with API Gateway.
+
+    Parameters:
+    - g_client (boto3.client): AWS API Gateway client.
+    - lambda_uri_ (str): The URI of the Lambda function to integrate with.
+    - rest_api_id_ (str): The ID of the API Gateway REST API.
+    - resource_id_ (str): The ID of the API Gateway resource.
+    - method_verb_ (str): The HTTP method (HTTP verb) for the integration.
+    
+    Available HTTP Methods (method_verb_):
+    - 'GET': Retrieve data from the resource.
+    - 'POST': Submit data to the resource to be processed.
+    - 'PUT': Update an existing resource or create a new one if it doesn't exist.
+    - 'DELETE': Remove a resource.
+    - 'PATCH': Partially update a resource.
+    - 'OPTIONS': Retrieve information about communication options for the resource.
+    - 'HEAD': Retrieve only the headers for the resource.
+    - 'TRACE': Perform a message tracing of the resource.
+
+    Example usage:
+    setup_integration(\
+        api_gateway_client, \
+        'arn:aws:lambda:us-east-1:123456789012:function/my-lambda', \
+        'api-id', \
+        'resource-id', \
+        'GET')
+    """
+    
     g_client.put_integration(
         restApiId=rest_api_id_,
         resourceId=resource_id_,
@@ -131,12 +164,51 @@ def add_apigateway_permission(l_client, function_name_, source_arn_):
         SourceArn=source_arn_
     )
 
+def wait_for_api_endpoint(api_gateway_client, rest_api_id, stage_name):
+    from time import sleep, time
+    start_time = time()
+    
+    response = api_gateway_client.get_stage(restApiId=rest_api_id, stageName=stage_name)
+
+    current_time=time()
+
+    def is_api_available(response):
+        last_update_time=response.get('lastUpdatedDate').timestamp()
+
+        return current_time-last_update_time<=GATEWAY_DEPLOYMENT_UPDATE_DELAY_SECONDS
+
+    while not is_api_available(response):
+        try:
+            response = api_gateway_client.get_stage(restApiId=rest_api_id, stageName=stage_name)
+            if is_api_available(response):
+                end_time = time()
+                duration = end_time - start_time
+
+                print(f"Endpoint is available at: {response['invokeUrl']}")
+                print(f"APIEndpoint deployment duration: {duration:.2f} seconds")
+                break
+            else:
+                print("Endpoint deployment is still in progress. Waiting...")
+                
+                # Wait for 10 seconds before checking again
+                sleep(GATEWAY_DEPLOYMENT_SLEEP_SECONDS)
+        
+        except api_gateway_client.exceptions.NotFoundException:
+            print("API Gateway stage not found. Waiting...")
+            
+            # Wait for 10 seconds before checking again
+            sleep(GATEWAY_DEPLOYMENT_SLEEP_SECONDS)
+
 def deploy_rest_api(\
         g_client, l_client, \
         account_id, region, \
         function_name_, rest_api_name_, endpoint_, method_verb_, \
-        usage_constraints_, stage_ \
+        api_usage_constraints, stage_ \
     ):
+    task_name=f"Deployment of REST API {rest_api_name_}"
+    
+    print_start_message(task_name)
+
     # First, lets verify whether we already have an endpoint with this name.
     if not has_api(g_client, rest_api_name_):
 
@@ -164,7 +236,7 @@ def deploy_rest_api(\
         api_key_id, api_key_value = create_api_key(g_client, rest_api_name_)
 
         # 8. Create usage plan
-        usage_plan_id = create_usage_plan(g_client, rest_api_id, stage_, usage_constraints_)
+        usage_plan_id = create_usage_plan(g_client, rest_api_id, stage_, api_usage_constraints)
         
         # 9. Associate the usage plan with the API key
         create_usage_plan_key(g_client, usage_plan_id, api_key_id)
@@ -177,6 +249,8 @@ def deploy_rest_api(\
         except l_client.exceptions.ResourceConflictException:
             pass
         
+        print_success_message(task_name)
+
         return {
             'url': build_api_url(rest_api_id, region, endpoint_, stage_),
             'api_key': api_key_value,
