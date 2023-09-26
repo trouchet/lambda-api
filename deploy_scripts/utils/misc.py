@@ -1,5 +1,4 @@
 from json import load, JSONDecodeError 
-from .default_values import DEFAULT_DELIMITER, DEFAULT_MULTIPLIER
 
 def load_JSON(json_file_path_):
     try:
@@ -29,32 +28,28 @@ def get_lambda_usage_constraints(usage_constraints_folder):
     usage_file_path = usage_constraints_folder+"/"+"api_usage_constraints.json"
     return load_JSON(usage_file_path)
 
-def repeat_delimiter(multiplier: int, delimiter: str):
-    return multiplier * delimiter
+def timing(custom_message):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            from time import time
 
-def fence(multiplier: int = DEFAULT_MULTIPLIER, delimiter: str = DEFAULT_DELIMITER) -> str:
-    return repeat_delimiter(multiplier, delimiter)
-
-def get_start_message(task_name: str):
-    return f"Task \"{task_name}\" just started!"
-
-def get_success_message(task_name: str) -> str:
-    return f"Task \"{task_name}\" finished successfully!"
-
-def print_start_message(task_name: str):
-    fence_string=fence()
-    
-    print(fence_string)
-    start_msg=get_start_message(task_name)
-    print(start_msg)
-    print(fence_string)
-
-def print_success_message(task_name: str):
-    fence_string=fence()
-    
-    print(fence_string)
-    success_msg=get_success_message(task_name)
-    print(success_msg)
-    print(fence_string)
-    
-    print()
+            # Record the start time
+            start_time = time()
+            
+            # Initial message
+            print(f"Starting execution of {custom_message}...")
+            
+            # Call the wrapped function
+            result = func(*args, **kwargs)
+            
+            # Calculate the time spent
+            end_time = time()
+            elapsed_time = end_time - start_time
+            
+            # Ending message
+            print(f"Finished execution of {custom_message}.")
+            print(f"Time taken: {elapsed_time:.2f} seconds")
+            
+            return result
+        return wrapper
+    return decorator
