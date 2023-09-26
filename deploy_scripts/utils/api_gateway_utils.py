@@ -200,9 +200,9 @@ def wait_for_api_endpoint(api_gateway_client, rest_api_id, stage_name):
             sleep(GATEWAY_DEPLOYMENT_SLEEP_SECONDS)
 
 def deploy_rest_api(\
-        g_client, l_client, \
-        account_id, region, \
-        function_name_, rest_api_name_, endpoint_, method_verb_, \
+        g_client, account_id, region, \
+        function_name_, lambda_uri_, \
+        rest_api_name_, endpoint_, method_verb_, \
         api_usage_constraints, stage_ \
     ):
     task_name=f"Deployment of REST API {rest_api_name_}"
@@ -221,13 +221,8 @@ def deploy_rest_api(\
         # 3. Create method
         create_rest_method(g_client, rest_api_id, resource_id, method_verb_)
         
-        # 4. Get the Lambda function ARN
-        lambda_arn = get_lambda_arn(l_client, function_name_)
-
         # 5. Set up integration with the Lambda function
-        lambda_uri = build_lambda_uri(region, lambda_arn)
-
-        setup_integration(g_client, lambda_uri, rest_api_id, resource_id, method_verb_)
+        setup_integration(g_client, lambda_uri_, rest_api_id, resource_id, method_verb_)
 
         # 6. Deploy API
         create_deployment(g_client, rest_api_id, stage_)

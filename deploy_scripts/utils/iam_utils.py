@@ -1,7 +1,6 @@
 from json import dumps
 
 from .misc import print_start_message, print_success_message
-from .default_values import DEFAULT_TAG
 
 def try_get_role(i_client, role_name_, trust_policy):
     try:
