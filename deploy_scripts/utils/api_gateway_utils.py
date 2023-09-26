@@ -1,14 +1,9 @@
-from .misc import print_start_message, print_success_message
+from .misc import timing
 from .default_values import GATEWAY_DEPLOYMENT_SLEEP_SECONDS, \
     GATEWAY_DEPLOYMENT_UPDATE_DELAY_SECONDS
 
 def build_source_arn(region_, account_id_, rest_api_id_):
     return f'arn:aws:execute-api:{region_}:{account_id_}:{rest_api_id_}/*'
-
-def build_lambda_uri(region_, lambda_arn_):
-    uri_host=f"arn:aws:apigateway:{region_}:lambda:path"
-    uri_route=f"2015-03-31/functions/{lambda_arn_}/invocations"
-    return f"{uri_host}/{uri_route}"
 
 def build_api_url(rest_api_id, region_, endpoint_, stage_):
     host=f"https://{rest_api_id}.execute-api.{region_}.amazonaws.com"
@@ -66,10 +61,6 @@ def create_rest_api(g_client, rest_api_name_):
     rest_api_id = response['id']
     
     return rest_api_id
-
-def get_lambda_arn(g_client, function_name_):
-    response = g_client.get_function(FunctionName=function_name_)
-    return response['Configuration']['FunctionArn']
 
 def setup_integration(g_client, lambda_uri_, rest_api_id_, resource_id_, method_verb_):
     """
@@ -199,16 +190,10 @@ def wait_for_api_endpoint(api_gateway_client, rest_api_id, stage_name):
             # Wait for 10 seconds before checking again
             sleep(GATEWAY_DEPLOYMENT_SLEEP_SECONDS)
 
-def deploy_rest_api(\
-        g_client, account_id, region, \
-        function_name_, lambda_uri_, \
-        rest_api_name_, endpoint_, method_verb_, \
-        api_usage_constraints, stage_ \
-    ):
-    task_name=f"Deployment of REST API {rest_api_name_}"
-    
-    print_start_message(task_name)
 
+def deploy_rest_api(g_client, account_id, region, \
+        lambda_uri_, rest_api_name_, endpoint_, method_verb_, \
+        stage_, api_usage_constraints_):
     # First, lets verify whether we already have an endpoint with this name.
     if not has_api(g_client, rest_api_name_):
 
@@ -231,26 +216,20 @@ def deploy_rest_api(\
         api_key_id, api_key_value = create_api_key(g_client, rest_api_name_)
 
         # 8. Create usage plan
-        usage_plan_id = create_usage_plan(g_client, rest_api_id, stage_, api_usage_constraints)
+        usage_plan_id = create_usage_plan(g_client, rest_api_id, stage_, api_usage_constraints_)
         
         # 9. Associate the usage plan with the API key
         create_usage_plan_key(g_client, usage_plan_id, api_key_id)
         
         # 10. Grant API Gateway permission to invoke the Lambda function
-        source_arn = build_source_arn(region, account_id, rest_api_id)
-        
-        try: 
-            add_apigateway_permission(l_client, function_name_, source_arn)
-        except l_client.exceptions.ResourceConflictException:
-            pass
-        
-        print_success_message(task_name)
+        this_api_arn = build_source_arn(region, account_id, rest_api_id)
 
         return {
             'url': build_api_url(rest_api_id, region, endpoint_, stage_),
             'api_key': api_key_value,
             'usage_plan_id': usage_plan_id,
-            'rest_api_id': rest_api_id
+            'rest_api_id': rest_api_id,
+            'arn': this_api_arn
         }
     
     else: 

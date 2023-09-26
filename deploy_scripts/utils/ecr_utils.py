@@ -1,8 +1,8 @@
-from os import system
+
 import subprocess
 from subprocess import DEVNULL
 
-from .misc import print_start_message, print_success_message
+from .misc import timing
 from .default_values import DEFAULT_TAG, IS_VERBOSE
 
 def build_tagged_image(image_name, tag):
@@ -17,11 +17,13 @@ def build_ecr_url(account_id_, region_, image_name, tag_=DEFAULT_TAG):
     
     return f"{password_stdin}/{tagged_image_name}"
 
+from os import system
+
 def run(command):
-    if(IS_VERBOSE):
+    if(not IS_VERBOSE):
         subprocess.run(command, stdout=DEVNULL, stderr=DEVNULL, shell=True)
     else:
-        system.run(command)
+        system(command)
 
 def login_ecr_docker(account_id, region):
     print('Logging in on ECR account...')
@@ -37,7 +39,7 @@ def login_ecr_docker(account_id, region):
     entry_command=f"{get_pwd_command} | {login_command}"
     
     run(entry_command)
-    
+
 def create_ecr_image(ecr_image_name_):
     
     print('Creating ECR image...')
@@ -83,11 +85,8 @@ def push_docker_image(tagged_image_uri):
 
     run(push_command)
 
-def pipe_docker_image(account_id_, region_, ecr_image_name_, tag_=DEFAULT_TAG):
-    task_name=f"Docker image upload on AWS ECR"
-
-    print_start_message(task_name)
-
+@timing("Docker image upload on AWS ECR")
+def pipe_docker_image_to_ecr(account_id_, region_, ecr_image_name_, tag_=DEFAULT_TAG):
     # 1. Log in to AWS ECR
     login_ecr_docker(account_id_, region_)
     
@@ -107,5 +106,3 @@ def pipe_docker_image(account_id_, region_, ecr_image_name_, tag_=DEFAULT_TAG):
 
     # 6. Push your image to ECR
     push_docker_image(routed_url)
-
-    print_success_message(task_name)
