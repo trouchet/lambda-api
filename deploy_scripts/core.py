@@ -86,7 +86,8 @@ def deploy_solution(account_info, activity_info, configuration_paths):
     # AWS account information
     aws_account_id_=account_info['account_id']
     aws_region_=account_info['region']
-    
+    iam_role_name_=account_info['iam_role']
+
     # Set up the IAM client
     iam_client_ = client('iam', region_name=aws_region_)
 
@@ -95,10 +96,8 @@ def deploy_solution(account_info, activity_info, configuration_paths):
 
     # Set up the API Gateway client
     gateway_client_ = client('apigateway', region_name=aws_region_)
-
-
+    
     # Activity information
-    iam_role_name_=activity_info['iam_role']
     ecr_image_name_=activity_info['image_name']
     func_description_=activity_info['lambda_function_description']
     endpoint_=activity_info['endpoint']
