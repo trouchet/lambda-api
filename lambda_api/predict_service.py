@@ -46,6 +46,8 @@ def make_prediction(payload: dict) -> dict:
     return model_prediction_map(payload)
 
 # Return JSON-like format for prediction response
+
+
 def api_return(body: dict, status: int, error: str = "") -> dict:
     """
     Create a JSON-like response format for API responses.
@@ -159,6 +161,8 @@ def validate_body(body: Union[str, list, dict]
     return is_valid, payload
 
 # Request event validation (i.e. body)
+
+
 def validate_event(event: dict, context: dict) -> dict:
     """
     Validate the request event, including its body.
@@ -187,6 +191,8 @@ def validate_event(event: dict, context: dict) -> dict:
     return api_return(payload_list, code, error_msg)
 
 # Prediction main map
+
+
 def predict(event: dict, context: dict) -> dict:
     """
     Handle prediction requests and return predictions along with appropriate HTTP status codes.
@@ -216,7 +222,7 @@ def predict(event: dict, context: dict) -> dict:
             status_code = SUCCESS_STATUS_CODE
 
             # Prediction
-            payload_list=loads(payload['body'])
+            payload_list = loads(payload["body"])
             prediction_result = make_prediction(payload_list)
 
             # Succeful prediction response
