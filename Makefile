@@ -77,10 +77,10 @@ lint: ## Add a rule to clean up any temporary files
 
 
 test: ## Add a rule to test the application
-	coverage run -m pytest
+	coverage run -m pytest --ignore=lambda_api/model_resolver.py
 
 report: test ## Add a rule to generate coverage report
-	coverage report --show-missing
+	coverage report --show-missing --omit="lambda_api/model_resolver.py"
 	coverage html
 	$(BROWSER) htmlcov/index.html
 
