@@ -17,13 +17,31 @@ from .utils.misc import timing
 
 
 def do_ecr_update(aws_account_id_, aws_region_, ecr_image_name_):
+    """
+    Perform the ECR update workflow, including creating and pushing a Docker image to AWS ECR.
+
+    Parameters:
+    - aws_account_id_ (str): AWS account ID.
+    - aws_region_ (str): AWS region.
+    - ecr_image_name_ (str): The name of the ECR repository.
+    """
+
     # The id "role_arn" will be used on lambda deployment
     pipe_docker_image_to_ecr(aws_account_id_, aws_region_, ecr_image_name_)
 
 
-def do_iam_update(iam_client_, iam_role_name_, trust_policy_file_path):
-    trust_policy = get_trust_policy(trust_policy_file_path)
+def do_iam_update(iam_client_, iam_role_name_, trust_policy):
+    """
+    Perform the IAM role update workflow, including creating or attaching a role policy.
 
+    Parameters:
+    - iam_client_ (boto3.client): AWS IAM client.
+    - iam_role_name_ (str): The name of the IAM role.
+    - trust_policy_file_path (str): The file path to the trust policy document in JSON format.
+
+    Returns:
+    str: The ARN (Amazon Resource Name) of the IAM role with the attached policy.
+    """
     # The id "role_arn" will be used on lambda deployment
     role_arn = try_attach_role_policy(
         iam_client_, iam_role_name_, trust_policy)
@@ -35,6 +53,21 @@ def do_lambda_update(
     lambda_client_, func_description_, ecr_image_name_,
     aws_account_id_, aws_region_, role_arn_
 ):
+    """
+    Perform the Lambda function update workflow, including deploying a Lambda function with a new ECR image.
+
+    Parameters:
+    - lambda_client_ (boto3.client): AWS Lambda client.
+    - func_description_ (str): The description of the Lambda function.
+    - ecr_image_name_ (str): The name of the ECR repository.
+    - aws_account_id_ (str): AWS account ID.
+    - aws_region_ (str): AWS region.
+    - role_arn_ (str): The ARN of the IAM role associated with the Lambda function.
+
+    Returns:
+    tuple: A tuple containing the Lambda function name and URI.
+    """
+
     # Gets lambda function according to ecr image name
     lambda_function_name_ = get_lambda_function_name(ecr_image_name_)
 
@@ -62,6 +95,24 @@ def do_api_update(
     lambda_uri_, lambda_function_name_,
     endpoint_, method_verb_, stage_name_, usage_constraints_
 ):
+    """
+    Perform the API Gateway update workflow, including deploying an API Gateway with a new Lambda integration.
+
+    Parameters:
+    - gateway_client_ (boto3.client): AWS API Gateway client.
+    - aws_account_id_ (str): AWS account ID.
+    - aws_region_ (str): AWS region.
+    - lambda_uri_ (str): The URI of the Lambda function to integrate with.
+    - lambda_function_name_ (str): The name of the Lambda function.
+    - endpoint_ (str): The endpoint name.
+    - method_verb_ (str): The HTTP method (HTTP verb) for the integration.
+    - stage_name_ (str): The deployment stage of the API.
+    - usage_constraints_ (dict): Usage constraints, including rate limits and quotas.
+
+    Returns:
+    dict: Information about the deployed API, including its URL, API key, usage plan ID, REST API ID, and ARN.
+    """
+
     # Defines the name of the API (not public facing)
     rest_api_name_ = lambda_function_name_ + "-api"
 
@@ -80,6 +131,18 @@ def do_api_update(
 
 
 def do_api_allowance(l_client, lambda_function_name, api_arn):
+    """
+    Allow API Gateway to access a Lambda function by adding permission.
+
+    Parameters:
+    - l_client (boto3.client): AWS Lambda client.
+    - lambda_function_name (str): The name of the Lambda function.
+    - api_arn (str): The ARN (Amazon Resource Name) of the API Gateway.
+
+    Returns:
+    None
+    """
+
     try:
         add_apigateway_permission(l_client, lambda_function_name, api_arn)
     except l_client.exceptions.ResourceConflictException:
@@ -88,7 +151,17 @@ def do_api_allowance(l_client, lambda_function_name, api_arn):
 
 @timing("Deployment of ML solution")
 def deploy_solution(account_info, activity_info, configuration_paths):
-    # Extract metadata
+    """
+    Deploy a machine learning solution by updating ECR, IAM, Lambda, and API Gateway configurations.
+
+    Parameters:
+    - account_info (dict): Information about the AWS account, including account ID, region, and IAM role.
+    - activity_info (dict): Information about the machine learning activity, including image name, Lambda function description, endpoint, method, and stage.
+    - configuration_paths (dict): File paths for configuration files, including trust policy and usage constraints.
+
+    Returns:
+    dict: Information about the deployed solution, including API key, API URL, and HTTP method.
+    """
 
     # AWS account information
     aws_account_id_ = account_info["account_id"]
@@ -111,8 +184,8 @@ def deploy_solution(account_info, activity_info, configuration_paths):
     method_verb_ = activity_info["method"]
     stage_name_ = activity_info["stage"]
 
-    usage_constraints_file_path = configuration_paths["usage_constraints"]
-    trust_policy_file_path = configuration_paths["trust_policy"]
+    usage_constraints = configuration_paths["usage_constraints"]
+    trust_policy = configuration_paths["trust_policy"]
 
     # Deployment pipeline steps:
 
@@ -120,10 +193,7 @@ def deploy_solution(account_info, activity_info, configuration_paths):
     do_ecr_update(aws_account_id_, aws_region_, ecr_image_name_)
 
     # 2. Updates iam permissions
-    role_arn_ = do_iam_update(
-        iam_client_,
-        iam_role_name_,
-        trust_policy_file_path)
+    role_arn_ = do_iam_update(iam_client_, iam_role_name_, trust_policy)
 
     # 3. Downloads respective ECR image and links to an
     lambda_function_name_, lambda_uri_ = do_lambda_update(
@@ -134,9 +204,6 @@ def deploy_solution(account_info, activity_info, configuration_paths):
     # 4. Updates API Gateway endpoint
     # Rate limits: Harsh since this will be public facing
     # Quota: Low daily limits for the same reason
-    usage_constraints = get_lambda_usage_constraints(
-        usage_constraints_file_path)
-
     api_deployment_reponse = do_api_update(
         gateway_client_, aws_account_id_, aws_region_,
         lambda_uri_, lambda_function_name_,
