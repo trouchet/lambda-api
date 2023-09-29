@@ -11,9 +11,11 @@ from lambda_api.default_values import SUCCESS_STATUS_CODE, \
     CLIENT_ERROR_STATUS_CODE, \
     SERVER_ERROR_STATUS_CODE
 
-MOCKED_ALLOWED_TYPES=(int, float)
+MOCKED_ALLOWED_TYPES = (int, float)
 
 # Define a mock for model_resolver.py
+
+
 @patch("lambda_api.predict_service.model_prediction_map")
 def test_predict(mock_model_prediction_map):
     # Set up the mock to return a specific result
@@ -37,43 +39,54 @@ def test_predict(mock_model_prediction_map):
     }
 
 # Mock functions for testing
+
+
 def mock_validate_event(event, context):
     return {
-        'statusCode': SUCCESS_STATUS_CODE,
-        'body': '[1, 2, 3]'  # Sample payload
+        "statusCode": SUCCESS_STATUS_CODE,
+        "body": "[1, 2, 3]"  # Sample payload
     }
+
 
 def mock_make_prediction(payload):
     raise ValueError("Prediction failed")
 
-@patch('lambda_api.predict_service.validate_event', side_effect=mock_validate_event)
-@patch('lambda_api.predict_service.make_prediction', side_effect=mock_make_prediction)
+
+@patch("lambda_api.predict_service.validate_event",
+       side_effect=mock_validate_event)
+@patch("lambda_api.predict_service.make_prediction",
+       side_effect=mock_make_prediction)
 def test_predict_error_handling(mock_validate_event, mock_make_prediction):
     # Simulate a request with a successful payload
     event = {}
     context = {}
     response = predict(event, context)
 
-    # Check that the response contains the error message and has a server error status code
+    # Check that the response contains the error message and has a server
+    # error status code
     assert response == {
-        'statusCode': SERVER_ERROR_STATUS_CODE,
-        'headers': {'Content-Type': 'application/json'},
-        'body': '[]',  # Empty list for error case
-        'isBase64Encoded': False,
-        'error_message': 'Prediction failed'  # Expected error message
+        "statusCode": SERVER_ERROR_STATUS_CODE,
+        "headers": {"Content-Type": "application/json"},
+        "body": "[]",  # Empty list for error case
+        "isBase64Encoded": False,
+        "error_message": "Prediction failed"  # Expected error message
     }
 
 # Mock functions for testing
+
+
 def mock_validate_event(event, context):
     # Simulate a request with a client error status code
     return {
-        'headers': {'Content-Type': 'application/json'}, \
-        'isBase64Encoded': False, \
-        'statusCode': CLIENT_ERROR_STATUS_CODE, \
-        'body': 'Invalid request'  # Sample error message
+        "headers": {"Content-Type": "application/json"},
+        "isBase64Encoded": False,
+        "statusCode": CLIENT_ERROR_STATUS_CODE,
+        "body": "Invalid request"  # Sample error message
     }
 
-@patch('lambda_api.predict_service.validate_event', side_effect=mock_validate_event)
+
+@patch("lambda_api.predict_service.validate_event",
+       side_effect=mock_validate_event)
 def test_predict_client_error(mock_validate_event):
     # Simulate a request with a client error status code
     event = {}
@@ -82,13 +95,15 @@ def test_predict_client_error(mock_validate_event):
 
     # Check that the response contains the payload from validate_event
     assert response == {
-        'statusCode': CLIENT_ERROR_STATUS_CODE,
-        'headers': {'Content-Type': 'application/json'},
-        'body': 'Invalid request',  # Expected error message
-        'isBase64Encoded': False,
+        "statusCode": CLIENT_ERROR_STATUS_CODE,
+        "headers": {"Content-Type": "application/json"},
+        "body": "Invalid request",  # Expected error message
+        "isBase64Encoded": False,
     }
 
 # Test case for make_prediction function
+
+
 @patch("lambda_api.predict_service.model_prediction_map")
 def test_make_prediction(mock_model_prediction_map):
     # Mock the model_prediction_map function
@@ -104,6 +119,8 @@ def test_make_prediction(mock_model_prediction_map):
     assert result == [4, 9, 16]
 
 # Test case for api_return functio
+
+
 def test_api_return():
     # Call api_return with sample data
     response = api_return({"data": "value"}, SUCCESS_STATUS_CODE, "")
@@ -116,6 +133,7 @@ def test_api_return():
         "isBase64Encoded": False
     }
 
+
 @patch("lambda_api.predict_service.ALLOWED_TYPES", MOCKED_ALLOWED_TYPES)
 def test_validate_data_valid_list():
     # Valid list input
@@ -125,6 +143,7 @@ def test_validate_data_valid_list():
 
     assert is_valid is True
     assert payload == data
+
 
 @patch("lambda_api.predict_service.ALLOWED_TYPES", MOCKED_ALLOWED_TYPES)
 def test_validate_data_valid_single_value():
@@ -136,6 +155,7 @@ def test_validate_data_valid_single_value():
     assert is_valid is True
     assert payload == [data]
 
+
 @patch("lambda_api.predict_service.ALLOWED_TYPES", MOCKED_ALLOWED_TYPES)
 def test_validate_data_invalid_type():
     # Invalid input type
@@ -146,6 +166,7 @@ def test_validate_data_invalid_type():
     assert is_valid is False
     assert payload == []
 
+
 @patch("lambda_api.predict_service.ALLOWED_TYPES", MOCKED_ALLOWED_TYPES)
 def test_validate_data_invalid_list():
     # Invalid list input
@@ -155,6 +176,7 @@ def test_validate_data_invalid_list():
 
     assert is_valid is False
     assert payload == []
+
 
 @patch("lambda_api.predict_service.ALLOWED_TYPES", MOCKED_ALLOWED_TYPES)
 def test_validate_data_custom_list_check():
@@ -168,6 +190,8 @@ def test_validate_data_custom_list_check():
     assert payload == []
 
 # Test case for a valid JSON string with 'data' key
+
+
 def test_validate_body_json():
     body = '{"data": [1, 2, 3]}'
     is_valid, payload = validate_body(body)
@@ -175,6 +199,8 @@ def test_validate_body_json():
     assert payload == [1, 2, 3]
 
 # Test case for a valid list
+
+
 def test_validate_body_list():
     body = [1, 2, 3]
     is_valid, payload = validate_body(body)
@@ -182,6 +208,8 @@ def test_validate_body_list():
     assert payload == [1, 2, 3]
 
 # Test case for a single valid type
+
+
 def test_validate_body_single_type():
     body = 42
     is_valid, payload = validate_body(body)
@@ -189,6 +217,8 @@ def test_validate_body_single_type():
     assert payload == [42]
 
 # Test case for an invalid JSON string
+
+
 def test_validate_body_invalid_json():
     body = '{"invalid_data": 42}'
     is_valid, payload = validate_body(body)
@@ -205,6 +235,8 @@ def test_validate_body_invalid_list():
     assert payload == []
 
 # Test case for an invalid type (set)
+
+
 def test_validate_body_invalid_type():
     body = {"key": "value"}
     is_valid, payload = validate_body(body)
@@ -212,6 +244,8 @@ def test_validate_body_invalid_type():
     assert payload == []
 
 # Test case for an empty string
+
+
 def test_validate_body_empty_string():
     body = ""
     is_valid, payload = validate_body(body)
@@ -219,6 +253,8 @@ def test_validate_body_empty_string():
     assert payload == []
 
 # Test case for validate_event function
+
+
 def test_validate_event():
     # Test with valid JSON string in the event body
     event = {"body": '{"data": [1, 2, 3]}'}
