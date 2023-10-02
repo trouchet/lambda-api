@@ -178,7 +178,7 @@ def deploy_lambda_function(
     routed_ecr_url (str): The uri of the ECR image.
     role_arn (str): The ARN of the IAM role associated with the Lambda function.
     """
-    print(f'Creating Lambda Function {lambda_function_name}...')
+    print(f"Creating Lambda Function {lambda_function_name}...")
     
     # Retrieve (if already exists) or create a new Lambda function
     create_lambda_function(
@@ -221,7 +221,7 @@ def update_lambda_function_code(
     Returns:
     tuple: A tuple containing the Lambda function name and URI.
     """
-    print(f'Updating Lambda Function {lambda_function_name}...')
+    print(f"Updating Lambda Function {lambda_function_name}...")
     
     # Update the Lambda function code
     lambda_client.update_function_code(

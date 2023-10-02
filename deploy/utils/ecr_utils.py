@@ -1,4 +1,3 @@
-from .misc import timing
 from .default_values import DEFAULT_TAG
 
 def build_tagged_image(image_name, tag):
@@ -144,8 +143,8 @@ def does_ecr_image_exist(region, ecr_image_name):
             
             repositories = response_json.get("repositories", [])
             
-            is_repository=lambda repository: \
-                repository.get('repositoryName', None) == ecr_image_name
+            def is_repository(repository):
+                return repository.get("repositoryName", None) == ecr_image_name
             this_repository=list(filter(is_repository, repositories))
             
             return len(this_repository) == 1
@@ -219,12 +218,12 @@ def push_docker_image(tagged_image_uri):
     run(push_command)
 
 def clear_images(ecr_image_name):
-    list_images=f'docker images'
-    grep_images=f'grep {ecr_image_name}'
+    list_images="docker images"
+    grep_images=f"grep {ecr_image_name}"
     get_images_ids="awk '{ print $3 }'"
-    rmi_images='xargs docker rmi'
+    rmi_images="xargs docker rmi"
     
-    clear_command=f'{list_images} | {grep_images} | {get_images_ids} | {rmi_images}'
+    clear_command=f"{list_images} | {grep_images} | {get_images_ids} | {rmi_images}"
 
     run(clear_command)
 

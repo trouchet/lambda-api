@@ -14,7 +14,7 @@ from .utils.api_gateway_utils import deploy_rest_api, \
     build_api_url
 from .utils.misc import timing
 
-@timing('ECR image upload')
+@timing("ECR image upload")
 def do_ecr_update(aws_account_id_, aws_region_, ecr_image_name_):
     """
     Perform the ECR update workflow, including creating and pushing a Docker image to AWS ECR.
@@ -30,7 +30,7 @@ def do_ecr_update(aws_account_id_, aws_region_, ecr_image_name_):
 
     return routed_url
 
-@timing('IAM policies update')
+@timing("IAM policies update")
 def do_iam_update(iam_client_, iam_role_name_, trust_policy):
     """
     Perform the IAM role update workflow, including creating or attaching a role policy.
@@ -49,7 +49,7 @@ def do_iam_update(iam_client_, iam_role_name_, trust_policy):
 
     return role_arn
 
-@timing('Lambda function deployment')
+@timing("Lambda function deployment")
 def do_lambda_update(
     lambda_client_, routed_ecr_url_, \
     lambda_function_name_, lambda_function_description_, role_arn_
