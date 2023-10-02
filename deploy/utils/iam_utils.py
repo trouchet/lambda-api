@@ -1,6 +1,6 @@
 from json import dumps
 
-from .misc import timing, handle_aws_errors
+from .misc import handle_aws_errors
 from .default_values import LAMBDA_POLICY_ARN
 
 @handle_aws_errors
@@ -30,7 +30,6 @@ def try_get_role(i_client, role_name_, trust_policy):
         )
 
 
-@timing("Role policy attachment")
 def try_attach_role_policy(i_client, role_name_, trust_policy):
     """
     Try to attach an AWS managed policy to an existing IAM role. If the role does not exist, create it first.

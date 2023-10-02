@@ -51,7 +51,7 @@ def build_ecr_url(account_id_, region_, image_name, tag_=DEFAULT_TAG):
     return f"{password_stdin}/{tagged_image_name}"
 
 
-def run(command, verbose=False):
+def run(command):
     """
     Run a shell command.
 
@@ -65,21 +65,17 @@ def run(command, verbose=False):
     import subprocess
 
     try:
-        if (verbose):
-            result = subprocess.run(command, shell=True, text=True)
-
-        else:
-            result = subprocess.run(
-                command, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                shell=True,
-                text=True
-            )
+        result = subprocess.run(
+            command, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,
+            shell=True,
+            text=True
+        )
 
         output = {
-            "stdout": result.stdout.strip(),
-            "stderr": result.stderr.strip(),
+            "stdout": str(result.stdout).strip() ,
+            "stderr": str(result.stdout).strip(),
             "returncode": result.returncode
         }
 
@@ -133,28 +129,33 @@ def create_ecr_image(ecr_image_name_):
 
     run(create_comand)
 
-def does_ecr_image_exist(region, repository_name):
+def does_ecr_image_exist(region, ecr_image_name):
     from json import loads
-
+    
     try:
         base_command="aws ecr"
         statement="describe-repositories"
-        args=f"--repository-names {repository_name} --region {region}"
+        args=f"--repository-names {ecr_image_name} --region {region}"
         command = f"{base_command} {statement} {args}"
         result = run(command)
         
         if result["returncode"] == 0:
             response_json = loads(result["stdout"])
+            
             repositories = response_json.get("repositories", [])
             
-            return len(repositories) > 0
+            is_repository=lambda repository: \
+                repository.get('repositoryName', None) == ecr_image_name
+            this_repository=list(filter(is_repository, repositories))
+            
+            return len(this_repository) == 1
         else:
             return False
     except Exception as e:
         print(f"An error occurred: {str(e)}")
         return False
 
-def delete_ecr_image(ecr_image_name_):
+def delete_ecr_image(region_, ecr_image_name_):
     """
     Delete an existing AWS ECR repository for a Docker image.
 
@@ -164,9 +165,9 @@ def delete_ecr_image(ecr_image_name_):
 
     print("Deleting existent ECR image...")
 
-    tags = f"--force --repository-name {ecr_image_name_}"
+    tags = f"--force --repository-name {ecr_image_name_} --region {region_}"
     delete_command = f"aws ecr delete-repository {tags}"
-
+    
     run(delete_command)
 
 
@@ -212,13 +213,21 @@ def push_docker_image(tagged_image_uri):
     """
 
     print("Pushing docker image to ECR...")
-
+    
     push_command = f"docker push {tagged_image_uri}"
 
     run(push_command)
 
+def clear_images(ecr_image_name):
+    list_images=f'docker images'
+    grep_images=f'grep {ecr_image_name}'
+    get_images_ids="awk '{ print $3 }'"
+    rmi_images='xargs docker rmi'
+    
+    clear_command=f'{list_images} | {grep_images} | {get_images_ids} | {rmi_images}'
 
-@timing("Docker image upload on AWS ECR")
+    run(clear_command)
+
 def pipe_docker_image_to_ecr(
     account_id_, region_, ecr_image_name_, tag_=DEFAULT_TAG
 ):
@@ -234,21 +243,26 @@ def pipe_docker_image_to_ecr(
 
     # 1. Log in to AWS ECR
     login_ecr_docker(account_id_, region_)
-
-    # 2. Check if the ECR repo already exists
-    if not does_ecr_image_exist(region_, ecr_image_name_):
-        # If it doesn't exist, create it
-        create_ecr_image(ecr_image_name_)
     
-    # 3. Build Docker image using your local Dockerfile
+    # 2. Check if the ECR repo already exists, delete it and create anew
+    if does_ecr_image_exist(region_, ecr_image_name_):
+        delete_ecr_image(region_, ecr_image_name_)
+
+    # 3. Create new image
+    create_ecr_image(ecr_image_name_)
+
+    # 4. Build Docker image using your local Dockerfile
     build_docker_image(ecr_image_name_)
 
-    # 4. Tag you image
+    # 5. Tag you image
     tagged_image_uri = build_tagged_image(ecr_image_name_, tag_)
     routed_url = build_ecr_url(account_id_, region_, ecr_image_name_, tag_)
     tag_docker_image(tagged_image_uri, routed_url)
 
-    # 5. Push your image to ECR
+    # 6. Push your image to ECR
     push_docker_image(routed_url)
+
+    # 7. Clear local images based on ecr image name
+    clear_images(ecr_image_name_)
 
     return routed_url

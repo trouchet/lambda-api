@@ -6,7 +6,7 @@ from .utils.misc import get_lambda_usage_constraints, \
     get_trust_policy
 from .utils.iam_utils import try_attach_role_policy
 from .utils.ecr_utils import pipe_docker_image_to_ecr
-from .utils.lambda_utils import deploy_lambda_function, \
+from .utils.lambda_utils import update_or_deploy_lambda_function, \
     get_lambda_arn, \
     build_lambda_uri
 from .utils.api_gateway_utils import deploy_rest_api, \
@@ -14,7 +14,7 @@ from .utils.api_gateway_utils import deploy_rest_api, \
     build_api_url
 from .utils.misc import timing
 
-
+@timing('ECR image upload')
 def do_ecr_update(aws_account_id_, aws_region_, ecr_image_name_):
     """
     Perform the ECR update workflow, including creating and pushing a Docker image to AWS ECR.
@@ -30,7 +30,7 @@ def do_ecr_update(aws_account_id_, aws_region_, ecr_image_name_):
 
     return routed_url
 
-
+@timing('IAM policies update')
 def do_iam_update(iam_client_, iam_role_name_, trust_policy):
     """
     Perform the IAM role update workflow, including creating or attaching a role policy.
@@ -49,82 +49,9 @@ def do_iam_update(iam_client_, iam_role_name_, trust_policy):
 
     return role_arn
 
-def lambda_exists(lambda_client, lambda_function_name):
-    """
-    Check if a Lambda function with the given name exists.
-
-    Parameters:
-    - lambda_client (boto3.client): AWS Lambda client.
-    - lambda_function_name (str): The name of the Lambda function.
-
-    Returns:
-    bool: True if the Lambda function exists, False otherwise.
-    """
-    try:
-        lambda_client.get_function(FunctionName=lambda_function_name)
-        return True
-    except lambda_client.exceptions.ResourceNotFoundException:
-        return False
-
-
-def update_or_deploy_lambda_function(\
-        lambda_client, \
-        lambda_function_name, \
-        lambda_function_description, \
-        ecr_image_url, role_arn
-    ):
-    """
-    Update or deploy a Lambda function based on whether it already exists.
-
-    This function checks if a Lambda function with the specified name already exists.
-    If it exists, it updates the Lambda function code with the provided ECR image URL.
-    If it doesn't exist, it deploys a new Lambda function with the ECR image.
-
-    Parameters:
-    - lambda_client (boto3.client): AWS Lambda client.
-    - lambda_function_name (str): The name of the Lambda function.
-    - lambda_function_description (str): The description of the Lambda function.
-    - ecr_image_url (str): The URL of the ECR image.
-    - role_arn (str): The ARN of the IAM role associated with the Lambda function.
-
-    Returns:
-    tuple: A tuple containing the Lambda function name and URI.
-    """
-
-    if lambda_exists(lambda_client, lambda_function_name):
-        # Update the Lambda function code
-        update_lambda_function_code(lambda_client, lambda_function_name, ecr_image_url)
-    else:
-        # Deploy a new Lambda function with the ECR image
-        deploy_lambda_function(
-            lambda_client, lambda_function_name, lambda_function_description, ecr_image_url, role_arn
-        )
-
-
-def update_lambda_function_code(
-    lambda_client, lambda_function_name, routed_ecr_url
-):
-    """
-    Update the Lambda function code with a new ECR image.
-
-    Parameters:
-    - lambda_client (boto3.client): AWS Lambda client.
-    - lambda_function_name (str): The name of the Lambda function.
-    - routed_ecr_url (str): The uri of the ECR repository.
-
-    Returns:
-    tuple: A tuple containing the Lambda function name and URI.
-    """
-    
-    # Update the Lambda function code
-    lambda_client.update_function_code(
-        FunctionName=lambda_function_name,
-        ImageUri=routed_ecr_url
-    )
-
-
+@timing('Lambda function deployment')
 def do_lambda_update(
-    lambda_client_, routed_ecr_url_,
+    lambda_client_, routed_ecr_url_, \
     lambda_function_name_, lambda_function_description_, role_arn_
 ):
     """
@@ -156,7 +83,7 @@ def do_lambda_update(
 
     return lambda_uri
 
-
+@timing("API endpoint deployment")
 def do_api_update(
     gateway_client_, aws_account_id_, aws_region_,
     lambda_uri_, lambda_function_name_,
@@ -189,7 +116,6 @@ def do_api_update(
 
     return api_deployment_reponse
 
-
 def do_api_allowance(l_client, lambda_function_name, api_arn):
     """
     Allow API Gateway to access a Lambda function by adding permission.
@@ -207,7 +133,6 @@ def do_api_allowance(l_client, lambda_function_name, api_arn):
         add_apigateway_permission(l_client, lambda_function_name, api_arn)
     except l_client.exceptions.ResourceConflictException:
         pass
-
 
 @timing("Deployment of ML solution")
 def deploy_api_endpoint(account_info, activity_info, configuration_info):
@@ -272,7 +197,7 @@ def deploy_api_endpoint(account_info, activity_info, configuration_info):
         lambda_uri_, lambda_function_name_, rest_api_name_,
         endpoint_, method_verb_, stage_name_, usage_constraints
     )
-
+    
     # 5. Allow API Gateway to access Lambda function
     api_arn = api_deployment_reponse["arn"]
     do_api_allowance(lambda_client_, lambda_function_name_, api_arn)

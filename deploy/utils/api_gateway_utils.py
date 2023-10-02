@@ -3,7 +3,7 @@ from botocore.exceptions import ClientError
 from .default_values import GATEWAY_DEPLOYMENT_SLEEP_SECONDS, \
     GATEWAY_DEPLOYMENT_UPDATE_DELAY_SECONDS
 
-from .misc import timing, handle_aws_errors
+from .misc import handle_aws_errors
 
 def build_source_arn(region_, account_id_, rest_api_id_):
     """
@@ -347,14 +347,16 @@ def add_apigateway_permission(l_client, function_name_, source_arn_):
     Returns:
     dict: The result of the `add_permission` operation.
     """
-
-    return l_client.add_permission(
-        FunctionName=function_name_,
-        StatementId="apigateway-lambda-invoke-permission",
-        Action="lambda:InvokeFunction",
-        Principal="apigateway.amazonaws.com",
-        SourceArn=source_arn_
-    )
+    try:
+        l_client.add_permission(
+            FunctionName=function_name_,
+            StatementId="apigateway-lambda-invoke-permission",
+            Action="lambda:InvokeFunction",
+            Principal="apigateway.amazonaws.com",
+            SourceArn=source_arn_
+        )
+    except l_client.exceptions.ResourceConflictException:
+        pass
 
 def create_usage_plan(g_client, rest_api_id_, api_key_id, stage_, usage_constraints_):
     """
@@ -488,7 +490,6 @@ def wait_for_api_endpoint(api_gateway_client, rest_api_id, stage_name):
             # Wait for 10 seconds before checking again
             sleep(GATEWAY_DEPLOYMENT_SLEEP_SECONDS)
 
-@timing("API endpoint deployment")
 def deploy_rest_api(g_client, account_id, region,
                     lambda_uri_, rest_api_name_, endpoint_, method_verb_,
                     stage_, api_usage_constraints_):
@@ -517,12 +518,8 @@ def deploy_rest_api(g_client, account_id, region,
     if not rest_api_id:
         rest_api_id = create_rest_api(g_client, rest_api_name_)
 
-    # 2.a. Check if the resource already exists
-    resource_id = get_resource_id_by_name(g_client, rest_api_id, endpoint_)
-    
-    # 2.b. If the resource doesn't exist, create it
-    if not resource_id:
-        resource_id = create_endpoint_resource(g_client, rest_api_id, endpoint_)
+    # If the resource doesn't exist, create it
+    resource_id = create_endpoint_resource(g_client, rest_api_id, endpoint_)
 
     # 3. Create REST method
     create_rest_method(g_client, rest_api_id, resource_id, method_verb_)

@@ -1,4 +1,4 @@
-from .misc import timing, handle_aws_errors
+from .misc import handle_aws_errors
 from .default_values import LAMBDA_SLEEP_SECONDS, LAMBDA_UPDATE_TIME_OUT_SECONDS
 
 def build_lambda_uri(region_, lambda_arn_):
@@ -163,8 +163,6 @@ def wait_for_lambda_deployment(lambda_client, lambda_function_name):
     lambda_deploy_message=f"Lambda function deployment duration: {duration_seconds}"
     print(lambda_deploy_message)
 
-
-@timing("Lambda Function deployment")
 def deploy_lambda_function(
     lambda_client, lambda_function_name, lambda_function_description,
     routed_ecr_url, role_arn
@@ -180,6 +178,7 @@ def deploy_lambda_function(
     routed_ecr_url (str): The uri of the ECR image.
     role_arn (str): The ARN of the IAM role associated with the Lambda function.
     """
+    print(f'Creating Lambda Function {lambda_function_name}...')
     
     # Retrieve (if already exists) or create a new Lambda function
     create_lambda_function(
@@ -188,3 +187,78 @@ def deploy_lambda_function(
     )
 
     wait_for_lambda_deployment(lambda_client, lambda_function_name)
+
+
+def lambda_exists(lambda_client, lambda_function_name):
+    """
+    Check if a Lambda function with the given name exists.
+
+    Parameters:
+    - lambda_client (boto3.client): AWS Lambda client.
+    - lambda_function_name (str): The name of the Lambda function.
+
+    Returns:
+    bool: True if the Lambda function exists, False otherwise.
+    """
+    try:
+        lambda_client.get_function(FunctionName=lambda_function_name)
+        return True
+    except lambda_client.exceptions.ResourceNotFoundException:
+        return False
+
+
+def update_lambda_function_code(
+    lambda_client, lambda_function_name, routed_ecr_url
+):
+    """
+    Update the Lambda function code with a new ECR image.
+
+    Parameters:
+    - lambda_client (boto3.client): AWS Lambda client.
+    - lambda_function_name (str): The name of the Lambda function.
+    - routed_ecr_url (str): The uri of the ECR repository.
+
+    Returns:
+    tuple: A tuple containing the Lambda function name and URI.
+    """
+    print(f'Updating Lambda Function {lambda_function_name}...')
+    
+    # Update the Lambda function code
+    lambda_client.update_function_code(
+        FunctionName=lambda_function_name,
+        ImageUri=routed_ecr_url
+    )
+
+
+def update_or_deploy_lambda_function(\
+        lambda_client, \
+        lambda_function_name, \
+        lambda_function_description, \
+        ecr_image_url, role_arn
+    ):
+    """
+    Update or deploy a Lambda function based on whether it already exists.
+
+    This function checks if a Lambda function with the specified name already exists.
+    If it exists, it updates the Lambda function code with the provided ECR image URL.
+    If it doesn't exist, it deploys a new Lambda function with the ECR image.
+
+    Parameters:
+    - lambda_client (boto3.client): AWS Lambda client.
+    - lambda_function_name (str): The name of the Lambda function.
+    - lambda_function_description (str): The description of the Lambda function.
+    - ecr_image_url (str): The URL of the ECR image.
+    - role_arn (str): The ARN of the IAM role associated with the Lambda function.
+
+    Returns:
+    tuple: A tuple containing the Lambda function name and URI.
+    """
+
+    if lambda_exists(lambda_client, lambda_function_name):
+        # Update the Lambda function code
+        update_lambda_function_code(lambda_client, lambda_function_name, ecr_image_url)
+    else:
+        # Deploy a new Lambda function with the ECR image
+        deploy_lambda_function(
+            lambda_client, lambda_function_name, lambda_function_description, ecr_image_url, role_arn
+        )
