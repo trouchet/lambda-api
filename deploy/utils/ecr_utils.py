@@ -78,16 +78,16 @@ def run(command, verbose=False):
             )
 
         output = {
-            'stdout': result.stdout.strip(),
-            'stderr': result.stderr.strip(),
-            'returncode': result.returncode
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+            "returncode": result.returncode
         }
 
         return output
     
     except Exception as e:
         print(f"An error occurred: {str(e)}")
-        return {'stdout': '', 'stderr': str(e), 'returncode': 1}
+        return {"stdout": "", "stderr": str(e), "returncode": 1}
 
 def login_ecr_docker(account_id, region):
     """
@@ -143,8 +143,8 @@ def does_ecr_image_exist(region, repository_name):
         command = f"{base_command} {statement} {args}"
         result = run(command)
         
-        if result['returncode'] == 0:
-            response_json = loads(result['stdout'])
+        if result["returncode"] == 0:
+            response_json = loads(result["stdout"])
             repositories = response_json.get("repositories", [])
             
             return len(repositories) > 0

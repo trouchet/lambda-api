@@ -9,8 +9,7 @@ from .utils.ecr_utils import pipe_docker_image_to_ecr
 from .utils.lambda_utils import deploy_lambda_function, \
     get_lambda_arn, \
     build_lambda_uri
-from .utils.api_gateway_utils import delete_apis_by_name, \
-    deploy_rest_api, \
+from .utils.api_gateway_utils import deploy_rest_api, \
     add_apigateway_permission, \
     build_api_url
 from .utils.misc import timing
