@@ -1,9 +1,9 @@
 from json import dumps
 
-from .misc import timing
+from .misc import timing, handle_aws_errors
 from .default_values import LAMBDA_POLICY_ARN
 
-
+@handle_aws_errors
 def try_get_role(i_client, role_name_, trust_policy):
     """
     Try to get an AWS IAM role by name. If the role does not exist, create it.

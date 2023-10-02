@@ -1,5 +1,5 @@
 from json import load, JSONDecodeError
-
+from botocore.exceptions import ClientError, BotoCoreError
 
 def load_JSON(json_file_path_):
     """
@@ -22,8 +22,7 @@ def load_JSON(json_file_path_):
             json_file_content = load(json_file)
 
         # Print the loaded trust_policy dictionary
-        print("Loaded JSON:")
-        print(json_file_content)
+        print(f"Loaded JSON: {json_file_path_}")
 
         return json_file_content
 
@@ -47,7 +46,6 @@ def get_trust_policy(trust_policy_folder):
     trust_policy_file_path = trust_policy_folder + "/" + "trust_policy.json"
 
     return load_JSON(trust_policy_file_path)
-
 
 def get_lambda_usage_constraints(usage_constraints_folder):
     """
@@ -101,3 +99,29 @@ def timing(custom_message):
             return result
         return wrapper
     return decorator
+
+
+def handle_aws_errors(func):
+    """
+    A decorator for handling AWS SDK errors in wrapped functions.
+
+    This decorator catches and handles AWS SDK errors, such as `botocore.exceptions.ClientError` and
+    `botocore.exceptions.BotoCoreError`, providing a consistent error handling approach.
+
+    Parameters:
+    - func: The function to be wrapped.
+
+    Returns:
+    - The result of the wrapped function or None in case of errors.
+    """
+    def wrapper(*args, **kwargs):
+        try:
+            result = func(*args, **kwargs)
+            return result
+        except ClientError as e:
+            print(f"An error occurred: {e}")
+            return None, None
+        except BotoCoreError as e:
+            print(f"An AWS SDK error occurred: {e}")
+            return None, None
+    return wrapper

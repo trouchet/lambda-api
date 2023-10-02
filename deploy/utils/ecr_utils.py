@@ -1,11 +1,5 @@
-
-from os import system
-import subprocess
-from subprocess import DEVNULL
-
 from .misc import timing
-from .default_values import DEFAULT_TAG, IS_VERBOSE
-
+from .default_values import DEFAULT_TAG
 
 def build_tagged_image(image_name, tag):
     """
@@ -57,26 +51,43 @@ def build_ecr_url(account_id_, region_, image_name, tag_=DEFAULT_TAG):
     return f"{password_stdin}/{tagged_image_name}"
 
 
-def run(command):
+def run(command, verbose=False):
     """
     Run a shell command.
 
     Parameters:
     command (str): The shell command to run.
+    verbose (bool, optional): If True, run the command in verbose mode (default is False).
+    
+    Returns:
+    dict: A dictionary containing 'stdout' and 'stderr' keys with the respective outputs.
     """
+    import subprocess
 
-    if (IS_VERBOSE):
-        result=system(command)
-    else:
-        result=subprocess.run(
-            command, 
-            stdout=DEVNULL, 
-            stderr=DEVNULL, 
-            shell=True,
-            text=True
-        )
+    try:
+        if (verbose):
+            result = subprocess.run(command, shell=True, text=True)
 
-    return result
+        else:
+            result = subprocess.run(
+                command, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                shell=True,
+                text=True
+            )
+
+        output = {
+            'stdout': result.stdout.strip(),
+            'stderr': result.stderr.strip(),
+            'returncode': result.returncode
+        }
+
+        return output
+    
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        return {'stdout': '', 'stderr': str(e), 'returncode': 1}
 
 def login_ecr_docker(account_id, region):
     """
@@ -122,18 +133,18 @@ def create_ecr_image(ecr_image_name_):
 
     run(create_comand)
 
-def does_ecr_repository_exist(region, repository_name):
+def does_ecr_image_exist(region, repository_name):
     from json import loads
 
     try:
         base_command="aws ecr"
-        statement=f"describe-repositories"
+        statement="describe-repositories"
         args=f"--repository-names {repository_name} --region {region}"
         command = f"{base_command} {statement} {args}"
         result = run(command)
-
-        if result.returncode == 0:
-            response_json = loads(result.stdout)
+        
+        if result['returncode'] == 0:
+            response_json = loads(result['stdout'])
             repositories = response_json.get("repositories", [])
             
             return len(repositories) > 0
@@ -225,10 +236,10 @@ def pipe_docker_image_to_ecr(
     login_ecr_docker(account_id_, region_)
 
     # 2. Check if the ECR repo already exists
-    if not does_ecr_repository_exist(region_, ecr_image_name_):
+    if not does_ecr_image_exist(region_, ecr_image_name_):
         # If it doesn't exist, create it
         create_ecr_image(ecr_image_name_)
-
+    
     # 3. Build Docker image using your local Dockerfile
     build_docker_image(ecr_image_name_)
 
@@ -239,3 +250,5 @@ def pipe_docker_image_to_ecr(
 
     # 5. Push your image to ECR
     push_docker_image(routed_url)
+
+    return routed_url

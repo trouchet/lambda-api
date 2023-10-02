@@ -1,12 +1,12 @@
 from boto3 import client
+from os import getenv
+from dotenv import load_dotenv
 
 from .utils.misc import get_lambda_usage_constraints, \
     get_trust_policy
 from .utils.iam_utils import try_attach_role_policy
 from .utils.ecr_utils import pipe_docker_image_to_ecr
-from .utils.lambda_utils import get_lambda_function_name, \
-    deploy_lambda_function, \
-    delete_lambda_function, \
+from .utils.lambda_utils import deploy_lambda_function, \
     get_lambda_arn, \
     build_lambda_uri
 from .utils.api_gateway_utils import delete_apis_by_name, \
@@ -27,7 +27,9 @@ def do_ecr_update(aws_account_id_, aws_region_, ecr_image_name_):
     """
 
     # The id "role_arn" will be used on lambda deployment
-    pipe_docker_image_to_ecr(aws_account_id_, aws_region_, ecr_image_name_)
+    routed_url = pipe_docker_image_to_ecr(aws_account_id_, aws_region_, ecr_image_name_)
+
+    return routed_url
 
 
 def do_iam_update(iam_client_, iam_role_name_, trust_policy):
@@ -48,52 +50,118 @@ def do_iam_update(iam_client_, iam_role_name_, trust_policy):
 
     return role_arn
 
-
-def do_lambda_update(
-    lambda_client_, func_description_, ecr_image_name_,
-    aws_account_id_, aws_region_, role_arn_
-):
+def lambda_exists(lambda_client, lambda_function_name):
     """
-    Perform the Lambda function update workflow, including deploying a Lambda function with a new ECR image.
+    Check if a Lambda function with the given name exists.
 
     Parameters:
-    - lambda_client_ (boto3.client): AWS Lambda client.
-    - func_description_ (str): The description of the Lambda function.
-    - ecr_image_name_ (str): The name of the ECR repository.
-    - aws_account_id_ (str): AWS account ID.
-    - aws_region_ (str): AWS region.
-    - role_arn_ (str): The ARN of the IAM role associated with the Lambda function.
+    - lambda_client (boto3.client): AWS Lambda client.
+    - lambda_function_name (str): The name of the Lambda function.
+
+    Returns:
+    bool: True if the Lambda function exists, False otherwise.
+    """
+    try:
+        lambda_client.get_function(FunctionName=lambda_function_name)
+        return True
+    except lambda_client.exceptions.ResourceNotFoundException:
+        return False
+
+
+def update_or_deploy_lambda_function(\
+        lambda_client, \
+        lambda_function_name, \
+        lambda_function_description, \
+        ecr_image_url, role_arn
+    ):
+    """
+    Update or deploy a Lambda function based on whether it already exists.
+
+    This function checks if a Lambda function with the specified name already exists.
+    If it exists, it updates the Lambda function code with the provided ECR image URL.
+    If it doesn't exist, it deploys a new Lambda function with the ECR image.
+
+    Parameters:
+    - lambda_client (boto3.client): AWS Lambda client.
+    - lambda_function_name (str): The name of the Lambda function.
+    - lambda_function_description (str): The description of the Lambda function.
+    - ecr_image_url (str): The URL of the ECR image.
+    - role_arn (str): The ARN of the IAM role associated with the Lambda function.
 
     Returns:
     tuple: A tuple containing the Lambda function name and URI.
     """
 
-    # Gets lambda function according to ecr image name
-    lambda_function_name_ = get_lambda_function_name(ecr_image_name_)
+    if lambda_exists(lambda_client, lambda_function_name):
+        # Update the Lambda function code
+        update_lambda_function_code(lambda_client, lambda_function_name, ecr_image_url)
+    else:
+        # Deploy a new Lambda function with the ECR image
+        deploy_lambda_function(
+            lambda_client, lambda_function_name, lambda_function_description, ecr_image_url, role_arn
+        )
 
-    # Deletes lambda function according to ecr image name
-    delete_lambda_function(lambda_client_, lambda_function_name_)
 
-    # Deploys lambda function of ECR image
-    deploy_lambda_function(
-        lambda_client_, func_description_,
-        aws_account_id_, aws_region_,
-        ecr_image_name_, role_arn_
+def update_lambda_function_code(
+    lambda_client, lambda_function_name, routed_ecr_url
+):
+    """
+    Update the Lambda function code with a new ECR image.
+
+    Parameters:
+    - lambda_client (boto3.client): AWS Lambda client.
+    - lambda_function_name (str): The name of the Lambda function.
+    - routed_ecr_url (str): The uri of the ECR repository.
+
+    Returns:
+    tuple: A tuple containing the Lambda function name and URI.
+    """
+    
+    # Update the Lambda function code
+    lambda_client.update_function_code(
+        FunctionName=lambda_function_name,
+        ImageUri=routed_ecr_url
+    )
+
+
+def do_lambda_update(
+    lambda_client_, routed_ecr_url_,
+    lambda_function_name_, lambda_function_description_, role_arn_
+):
+    """
+    Update the Lambda function code with a new ECR image if it exists, or create it if it doesn't.
+
+    Parameters:
+    - lambda_client_ (boto3.client): AWS Lambda client.
+    - routed_ecr_url_ (str): The uri of the ECR repository.
+    - lambda_function_name_ (str): The name of the Lambda function.    
+    - aws_account_id (str): AWS account ID.
+    - aws_region (str): AWS region.
+    - role_arn (str): The ARN of the IAM role associated with the Lambda function.
+
+    Returns:
+    tuple: A tuple containing the Lambda function name and URI.
+    """
+
+    update_or_deploy_lambda_function(\
+        lambda_client_, lambda_function_name_, lambda_function_description_, \
+        routed_ecr_url_, role_arn_
     )
 
     # Get the Lambda function ARN
     lambda_arn = get_lambda_arn(lambda_client_, lambda_function_name_)
 
     # Set up integration with the Lambda function
+    aws_region_=lambda_client_.meta.region_name
     lambda_uri = build_lambda_uri(aws_region_, lambda_arn)
 
-    return lambda_function_name_, lambda_uri
+    return lambda_uri
 
 
 def do_api_update(
     gateway_client_, aws_account_id_, aws_region_,
     lambda_uri_, lambda_function_name_,
-    endpoint_, method_verb_, stage_name_, usage_constraints_
+    rest_api_name_, endpoint_, method_verb_, stage_name_, usage_constraints_
 ):
     """
     Perform the API Gateway update workflow, including deploying an API Gateway with a new Lambda integration.
@@ -112,13 +180,6 @@ def do_api_update(
     Returns:
     dict: Information about the deployed API, including its URL, API key, usage plan ID, REST API ID, and ARN.
     """
-
-    # Defines the name of the API (not public facing)
-    rest_api_name_ = lambda_function_name_ + "-api"
-
-    # Delete previous API Gateway
-    # FIX: This is too harsh. Try update it!
-    delete_apis_by_name(gateway_client_, rest_api_name_)
 
     # Deploys lambda function as API Gateway endpoint
     api_deployment_reponse = deploy_rest_api(
@@ -150,14 +211,15 @@ def do_api_allowance(l_client, lambda_function_name, api_arn):
 
 
 @timing("Deployment of ML solution")
-def deploy_solution(account_info, activity_info, configuration_paths):
+def deploy_api_endpoint(account_info, activity_info, configuration_info):
     """
     Deploy a machine learning solution by updating ECR, IAM, Lambda, and API Gateway configurations.
 
     Parameters:
     - account_info (dict): Information about the AWS account, including account ID, region, and IAM role.
-    - activity_info (dict): Information about the machine learning activity, including image name, Lambda function description, endpoint, method, and stage.
-    - configuration_paths (dict): File paths for configuration files, including trust policy and usage constraints.
+    - activity_info (dict): Information about the machine learning activity, including image name, \
+        Lambda function description, endpoint, method, and stage.
+    - configuration_info (dict): Configuration objects (trust policy and usage constraints)
 
     Returns:
     dict: Information about the deployed solution, including API key, API URL, and HTTP method.
@@ -179,26 +241,28 @@ def deploy_solution(account_info, activity_info, configuration_paths):
 
     # Activity information
     ecr_image_name_ = activity_info["image_name"]
-    func_description_ = activity_info["lambda_function_description"]
+    lambda_function_name_ = activity_info["lambda_function_name"]
+    lambda_function_description_ = activity_info["lambda_function_description"]
+    rest_api_name_ = activity_info["rest_api_name"]
     endpoint_ = activity_info["endpoint"]
-    method_verb_ = activity_info["method"]
+    method_verb_ = activity_info["method_verb"]
     stage_name_ = activity_info["stage"]
 
-    usage_constraints = configuration_paths["usage_constraints"]
-    trust_policy = configuration_paths["trust_policy"]
+    usage_constraints = configuration_info["usage_constraints"]
+    trust_policy = configuration_info["trust_policy"]
 
     # Deployment pipeline steps:
 
     # 1. Creates docker image and uploads to ECR
-    do_ecr_update(aws_account_id_, aws_region_, ecr_image_name_)
+    routed_ecr_url = do_ecr_update(aws_account_id_, aws_region_, ecr_image_name_)
 
     # 2. Updates iam permissions
     role_arn_ = do_iam_update(iam_client_, iam_role_name_, trust_policy)
-
+    
     # 3. Downloads respective ECR image and links to an
-    lambda_function_name_, lambda_uri_ = do_lambda_update(
-        lambda_client_, func_description_, ecr_image_name_,
-        aws_account_id_, aws_region_, role_arn_
+    lambda_uri_ = do_lambda_update(
+        lambda_client_, routed_ecr_url, 
+        lambda_function_name_, lambda_function_description_, role_arn_
     )
 
     # 4. Updates API Gateway endpoint
@@ -206,7 +270,7 @@ def deploy_solution(account_info, activity_info, configuration_paths):
     # Quota: Low daily limits for the same reason
     api_deployment_reponse = do_api_update(
         gateway_client_, aws_account_id_, aws_region_,
-        lambda_uri_, lambda_function_name_,
+        lambda_uri_, lambda_function_name_, rest_api_name_,
         endpoint_, method_verb_, stage_name_, usage_constraints
     )
 
@@ -226,3 +290,35 @@ def deploy_solution(account_info, activity_info, configuration_paths):
         "api_url": api_url,
         "method_verb": method_verb_,
     }
+
+
+def do_deploy(activity_info_, configuration_info_):
+
+    # Load environment variables from .env
+    deploy_environment_path=configuration_info_["environment_path"]
+    trust_policy_path=configuration_info_["trust_policy_path"]
+    usage_constraints_path=configuration_info_["usage_constraints_path"]
+
+    # Load environment variables from .env, usage constraints and trust policy
+    load_dotenv(deploy_environment_path)
+    usage_constraints = get_lambda_usage_constraints(usage_constraints_path)
+    trust_policy = get_trust_policy(trust_policy_path)
+
+    aws_account_id = getenv("AWS_ACCOUNT_ID")
+    aws_region = getenv("AWS_REGION")
+    iam_role_name = getenv("IAM_ROLE_NAME")
+
+    account_info={
+        "account_id": aws_account_id,
+        "region": aws_region,
+        "iam_role":iam_role_name
+    }
+
+    configuration_info={
+        "usage_constraints": usage_constraints,
+        "trust_policy": trust_policy
+    }
+
+    deployment_info = deploy_api_endpoint(account_info, activity_info_, configuration_info)
+
+    return deployment_info

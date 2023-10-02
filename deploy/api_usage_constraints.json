@@ -1,4 +1,6 @@
 {
+    "name": "API usage plan",
+    "description": "Harsh rate limits and daily quota for public facing API",
     "rate_limits": {
         "burstLimit": 10,
         "rateLimit": 10.0

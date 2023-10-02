@@ -1,23 +1,5 @@
-from .ecr_utils import build_ecr_url
-from .misc import timing
+from .misc import timing, handle_aws_errors
 from .default_values import LAMBDA_SLEEP_SECONDS, LAMBDA_UPDATE_TIME_OUT_SECONDS
-
-
-def get_lambda_arn(g_client, function_name_):
-    """
-    Get the ARN (Amazon Resource Name) of a Lambda function.
-
-    Parameters:
-    g_client (boto3.client): AWS Lambda client.
-    function_name_ (str): The name of the Lambda function.
-
-    Returns:
-    str: The ARN of the Lambda function.
-    """
-
-    response = g_client.get_function(FunctionName=function_name_)
-    return response["Configuration"]["FunctionArn"]
-
 
 def build_lambda_uri(region_, lambda_arn_):
     """
@@ -49,6 +31,23 @@ def get_lambda_function_name(ecr_image_name: str):
 
     return f"lambda-fn-{ecr_image_name}"
 
+@handle_aws_errors
+def get_lambda_arn(g_client, function_name_):
+    """
+    Get the ARN (Amazon Resource Name) of a Lambda function.
+
+    Parameters:
+    g_client (boto3.client): AWS Lambda client.
+    function_name_ (str): The name of the Lambda function.
+
+    Returns:
+    str: The ARN of the Lambda function.
+    """
+
+    response = g_client.get_function(FunctionName=function_name_)
+    return response["Configuration"]["FunctionArn"]
+
+@handle_aws_errors
 def create_lambda_function(
         l_client,
         function_name,
@@ -89,6 +88,7 @@ def create_lambda_function(
         print(failure_message)
 
 
+@handle_aws_errors
 def get_lambda_function(l_client, function_name):
     """
     Get details of a Lambda function.
@@ -109,8 +109,6 @@ def get_lambda_function(l_client, function_name):
     except l_client.exceptions.ResourceNotFoundException:
         print(failure_message)
 
-# snippet-start:[python.example_code.lambda.DeleteFunction]
-
 
 def delete_lambda_function(l_client, function_name):
     """
@@ -124,6 +122,7 @@ def delete_lambda_function(l_client, function_name):
         print(f"Couldn't delete function {function_name}.", )
 
 
+@handle_aws_errors
 def wait_for_lambda_deployment(lambda_client, lambda_function_name):
     """
     Wait for the deployment of a Lambda function.
@@ -160,18 +159,15 @@ def wait_for_lambda_deployment(lambda_client, lambda_function_name):
         # Wait before checking again
         sleep(LAMBDA_SLEEP_SECONDS)
 
-    print(
-        f"Lambda function deployment duration: {deployment_duration:.2f} seconds")
+    duration_seconds=f"{deployment_duration:.2f} seconds"
+    lambda_deploy_message=f"Lambda function deployment duration: {duration_seconds}"
+    print(lambda_deploy_message)
 
 
 @timing("Lambda Function deployment")
 def deploy_lambda_function(
-    lambda_client,
-    func_description,
-    aws_account_id,
-    aws_region,
-    ecr_image_name,
-    role_arn
+    lambda_client, lambda_function_name, lambda_function_description,
+    routed_ecr_url, role_arn
 ):
     """
     Deploy a Lambda function.
@@ -181,22 +177,14 @@ def deploy_lambda_function(
     func_description (str): The description of the Lambda function.
     aws_account_id (str): The AWS account ID.
     aws_region (str): The AWS region.
-    ecr_image_name (str): The name of the ECR image.
+    routed_ecr_url (str): The uri of the ECR image.
     role_arn (str): The ARN of the IAM role associated with the Lambda function.
     """
     
-    # Function name (not public facing)
-    lambda_function_name = get_lambda_function_name(ecr_image_name)
-
     # Retrieve (if already exists) or create a new Lambda function
-    routed_url = build_ecr_url(aws_account_id, aws_region, ecr_image_name)
-
     create_lambda_function(
-        lambda_client,
-        lambda_function_name,
-        func_description,
-        routed_url,
-        role_arn
+        lambda_client, lambda_function_name, lambda_function_description, \
+        routed_ecr_url, role_arn
     )
 
     wait_for_lambda_deployment(lambda_client, lambda_function_name)

@@ -16,9 +16,6 @@ DEFAULT_TAG = "latest"
 # The ARN (Amazon Resource Name) for the AWS Lambda execution role.
 LAMBDA_POLICY_ARN = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 
-# Set to True to enable verbosity, False to disable.
-IS_VERBOSE = False
-
 
 
 
