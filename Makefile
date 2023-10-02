@@ -60,7 +60,7 @@ clean: clean-logs clean-pyc clean-test clean-cache ## Add a rule to remove unnec
 env: ## Add a rule to activate environment
 	poetry shell
 
-notebok: ## Add a rule to activate environment
+notebook: ## Add a rule to activate environment
 	jupyter notebook
 
 allow: ## Add a rule to allow scripts to execute
@@ -75,14 +75,11 @@ lint: ## Add a rule to clean up any temporary files
 	ruff --fix .
 	find $(SOURCE_FOLDER) -name "*.py" -exec autopep8 --in-place --aggressive --aggressive {} \;
 
-
 test: ## Add a rule to test the application
-	coverage run -m pytest --ignore=lambda_api/model_resolver.py
+	poetry run coverage run --rcfile=.coveragerc --omit='lambda_api/model_resolver.py' -m pytest
 
 report: test ## Add a rule to generate coverage report
-	coverage report --show-missing --omit="lambda_api/model_resolver.py"
-	coverage html
+	poetry run coverage report --show-missing --omit="lambda_api/model_resolver.py"
+	poetry run coverage html
 	$(BROWSER) htmlcov/index.html
 
-ps: ## Add a rule to list containers
-	docker ps -a
