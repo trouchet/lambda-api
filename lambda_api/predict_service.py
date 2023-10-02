@@ -250,5 +250,3 @@ def predict(event: dict, context: dict) -> dict:
         response = payload
 
     return response
-
-
