@@ -47,6 +47,19 @@ def get_trust_policy(trust_policy_folder):
 
     return load_JSON(trust_policy_file_path)
 
+def get_current_function_folder():
+    from os import path
+    from inspect import currentframe
+
+    # Get the filename of the current frame (function or method)
+    current_frame = currentframe()
+    current_filename = current_frame.f_code.co_filename
+    
+    # Get the directory path of the current filename
+    current_folder = path.dirname(path.abspath(current_filename))
+    
+    return current_folder
+
 def get_lambda_usage_constraints(usage_constraints_folder):
     """
     Get lambda usage constraints from a specified folder.
@@ -100,6 +113,13 @@ def timing(custom_message):
         return wrapper
     return decorator
 
+def get_calling_module_folder(calling_module_file):
+    from os import path
+
+    # Get the directory path of the calling module
+    abs_path = path.abspath(calling_module_file)
+    calling_module_folder = path.dirname(abs_path)
+    return calling_module_folder
 
 def handle_aws_errors(func):
     """

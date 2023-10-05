@@ -89,6 +89,8 @@ def has_api(g_client, rest_api_name_):
 
     return create_api_on_gateway
 
+
+
 @handle_aws_errors
 def get_rest_api_id_by_name(g_client, rest_api_name):
     """
@@ -125,12 +127,12 @@ def get_resource_id_by_name(g_client, rest_api_id, resource_name):
     response = g_client.get_resources(restApiId=rest_api_id)
     
     for resource in response["items"]:
-        if resource["pathPart"] == resource_name:
+        pathPart=resource.get('pathPart', '')
+
+        if pathPart == resource_name:
             return resource["id"]
 
     return None
-
-
 
 def create_endpoint_resource(g_client, rest_api_id_, endpoint_):
     """
@@ -142,22 +144,45 @@ def create_endpoint_resource(g_client, rest_api_id_, endpoint_):
     - endpoint_ (str): The name of the resource to create.
 
     Returns:
-    str: The ID of the created resource.
+    str: The ID of the created resource or the existing resource with the same name.
     """
 
-    response = g_client.get_resources(restApiId=rest_api_id_)
-    root_id = response["items"][0]["id"]
+    try:
+        response = g_client.get_resources(restApiId=rest_api_id_)
+        root_id = response["items"][0]["id"]
 
-    response = g_client.create_resource(
-        restApiId=rest_api_id_,
-        parentId=root_id,
-        pathPart=endpoint_,
-    )
+        response = g_client.create_resource(
+            restApiId=rest_api_id_,
+            parentId=root_id,
+            pathPart=endpoint_,
+        )
 
-    resource_id = response["id"]
+        resource_id = response["id"]
+    except ClientError as e:
+        error_reponse_code=e.response.get('Error', '').get('Code', '')
+        if error_reponse_code == 'ConflictException':
+            # Resource with the same name already exists, retrieve its ID
+            existing_resource_name = endpoint_
+            existing_resource_id = None
+            
+            # Find the existing resource ID
+            for item in response["items"]:
+                pathPart=item.get('pathPart', '')
+
+                if pathPart == existing_resource_name:
+                    existing_resource_id = item["id"]
+                    break
+
+            if existing_resource_id:
+                resource_id = existing_resource_id
+            else:
+                # Handle the case where the existing resource ID is not found
+                raise Exception("Existing resource ID not found")
+        else:
+            # Handle other AWS SDK errors
+            raise e
 
     return resource_id
-
 
 def create_rest_method(g_client, rest_api_id_, resource_id_, method_verb_):
     """
@@ -183,7 +208,6 @@ def create_rest_method(g_client, rest_api_id_, resource_id_, method_verb_):
         # If the method already exists, we catch the ConflictException
         # and consider it as an update operation.
         pass
-
 
 
 def create_rest_api(g_client, rest_api_name_):
@@ -517,17 +541,20 @@ def deploy_rest_api(g_client, account_id, region,
     # 1.b. If the API doesn't exist, create it
     if not rest_api_id:
         rest_api_id = create_rest_api(g_client, rest_api_name_)
-
-    # If the resource doesn't exist, create it
-    resource_id = create_endpoint_resource(g_client, rest_api_id, endpoint_)
+    
+    # 2. Create or retrieve REST resource
+    resource_id = get_resource_id_by_name(g_client, rest_api_id, endpoint_)
+    if not resource_id:
+        # If the resource doesn't exist, create it
+        resource_id = create_endpoint_resource(g_client, rest_api_id, endpoint_)
 
     # 3. Create REST method
     create_rest_method(g_client, rest_api_id, resource_id, method_verb_)
 
     # 4. Set up integration with the Lambda function
     setup_integration(g_client, lambda_uri_, rest_api_id, resource_id, method_verb_)
-
-    # 5. Deploy API
+    
+    # 5. Create or update API stage
     create_or_update_deployment(g_client, rest_api_id, stage_)
 
     # 6. Create API key

@@ -3,7 +3,7 @@ from os import getenv
 from dotenv import load_dotenv
 
 from .utils.misc import get_lambda_usage_constraints, \
-    get_trust_policy
+    get_trust_policy, get_calling_module_folder
 from .utils.iam_utils import try_attach_role_policy
 from .utils.ecr_utils import pipe_docker_image_to_ecr
 from .utils.lambda_utils import update_or_deploy_lambda_function, \
@@ -216,21 +216,75 @@ def deploy_api_endpoint(account_info, activity_info, configuration_info):
     }
 
 
-def do_deploy(activity_info_, configuration_info_):
+def do_deploy(account_info, activity_info_, configuration_info_):
 
     # Load environment variables from .env
-    deploy_environment_path=configuration_info_["environment_path"]
     trust_policy_path=configuration_info_["trust_policy_path"]
     usage_constraints_path=configuration_info_["usage_constraints_path"]
 
     # Load environment variables from .env, usage constraints and trust policy
-    load_dotenv(deploy_environment_path)
     usage_constraints = get_lambda_usage_constraints(usage_constraints_path)
     trust_policy = get_trust_policy(trust_policy_path)
 
+    configuration={
+        "usage_constraints": usage_constraints,
+        "trust_policy": trust_policy
+    }
+
+    deployment_info = deploy_api_endpoint(account_info, activity_info_, configuration)
+
+    return deployment_info
+
+def deploy_application(info_environment_path):
+    """
+    Deploy an application by retrieving environment variables, constructing deployment information,
+    and invoking the deployment process.
+
+    Args:
+        info_environment_path (str): The path to the environment file containing necessary information
+            such as AWS account ID, region, IAM role name, ECR image name, Lambda function details,
+            API Gateway details, and more.
+
+    Returns:
+        str: A message indicating the status of the deployment process.
+
+    Example:
+        # Deploy an application using the specified environment file
+        result = deploy_application('/path/to/environment.env')
+        print(result)
+
+    Note:
+        - The environment file should contain the following variables:
+            - AWS_ACCOUNT_ID: AWS account ID
+            - AWS_REGION: AWS region
+            - IAM_ROLE_NAME: IAM role name
+            - ECR_IMAGE_NAME: ECR image name
+            - LAMBDA_NAME: Lambda function name
+            - LAMBDA_DESCRIPTION: Lambda function description
+            - LAMBDA_METHOD_VERB: Lambda function method verb
+            - API_NAME: API Gateway name
+            - API_STAGE: API Gateway stage
+            - API_ENDPOINT: API Gateway endpoint
+
+        - Additionally, ensure that trust_policy and api_usage_constraints files are present
+          in the same directory as this script/module.
+
+    """
+    
+    load_dotenv(info_environment_path)
     aws_account_id = getenv("AWS_ACCOUNT_ID")
     aws_region = getenv("AWS_REGION")
     iam_role_name = getenv("IAM_ROLE_NAME")
+
+    ecr_image_name=getenv('ECR_IMAGE_NAME')
+
+    lambda_name=getenv('LAMBDA_NAME')
+    lambda_description=getenv('LAMBDA_DESCRIPTION')
+    lambda_method_verb=getenv('LAMBDA_METHOD_VERB')
+    
+    api_name=getenv('API_NAME')
+    api_stage=getenv('API_STAGE')
+    api_endpoint=getenv('API_ENDPOINT')
 
     account_info={
         "account_id": aws_account_id,
@@ -238,11 +292,25 @@ def do_deploy(activity_info_, configuration_info_):
         "iam_role":iam_role_name
     }
 
-    configuration_info={
-        "usage_constraints": usage_constraints,
-        "trust_policy": trust_policy
+    activity_info = {
+        'image_name': ecr_image_name,
+        "lambda_function_name": lambda_name,
+        'lambda_function_description': lambda_description,
+        "rest_api_name": api_name,
+        'stage': api_stage,
+        'method_verb': lambda_method_verb,
+        'endpoint': api_endpoint                
     }
 
-    deployment_info = deploy_api_endpoint(account_info, activity_info_, configuration_info)
-
-    return deployment_info
+    # Base folder for trust policy and usage constraints
+    # NOTE: Files must have name as below:
+    #   - api_usage_constraints;
+    #   - trust_policy.
+    calling_module_folder = get_calling_module_folder(__file__)
+    
+    configuration_info={
+        'trust_policy_path': calling_module_folder,
+        'usage_constraints_path': calling_module_folder
+    }
+    
+    return do_deploy(account_info, activity_info, configuration_info)
